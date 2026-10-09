@@ -23,18 +23,8 @@ const { env, printWarnings } = require('./env');
 
 const app = express();
 
-// ---- CORS: only the known frontends ----
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true); // curl / server-to-server
-      if (env.corsOrigins.length === 0 || env.corsOrigins.includes(origin)) {
-        return cb(null, true);
-      }
-      return cb(new Error('CORS blocked for origin ' + origin));
-    },
-  })
-);
+// ---- CORS: allow all origins (public API for the KRYZO app) ----
+app.use(cors());
 
 // ---- Webhook raw body FIRST (signature verification needs exact bytes) ----
 app.use('/api/billing/webhook', express.raw({ type: '*/*', limit: '1mb' }));
