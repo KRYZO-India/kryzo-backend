@@ -22,9 +22,9 @@ function bad(res, code, msg, status = 400) {
   return res.status(status).json({ error: code, message: msg });
 }
 
-// POST /api/auth/send-otp
-router.post('/send-otp', async (req, res) => {
-  const email = (req.body && req.body.email || '').trim().toLowerCase();
+// POST /api/auth/send-otp (also accepts GET for networks that block POST)
+async function handleSendOtp(req, res) {
+  const email = ((req.body && req.body.email) || req.query.email || '').trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return bad(res, 'invalid_email', 'Sahi email dalo');
   }
@@ -45,12 +45,14 @@ router.post('/send-otp', async (req, res) => {
     console.error('[auth-proxy] send-otp exception:', e.message);
     return bad(res, 'otp_failed', 'OTP bhejne mein dikkat aayi', 500);
   }
-});
+}
+router.post('/send-otp', handleSendOtp);
+router.get('/send-otp', handleSendOtp);
 
-// POST /api/auth/verify-otp
-router.post('/verify-otp', async (req, res) => {
-  const email = (req.body && req.body.email || '').trim().toLowerCase();
-  const token = (req.body && req.body.token || '').trim();
+// POST /api/auth/verify-otp (also accepts GET for networks that block POST)
+async function handleVerifyOtp(req, res) {
+  const email = ((req.body && req.body.email) || req.query.email || '').trim().toLowerCase();
+  const token = ((req.body && req.body.token) || req.query.token || '').trim();
   if (!email || !token) {
     return bad(res, 'missing_fields', 'Email aur OTP dono chahiye');
   }
@@ -88,6 +90,8 @@ router.post('/verify-otp', async (req, res) => {
     console.error('[auth-proxy] verify-otp exception:', e.message);
     return bad(res, 'verify_failed', 'Verify karne mein dikkat aayi', 500);
   }
-});
+}
+router.post('/verify-otp', handleVerifyOtp);
+router.get('/verify-otp', handleVerifyOtp);
 
 module.exports = router;
