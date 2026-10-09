@@ -96,5 +96,75 @@ async function handleVerifyOtp(req, res) {
       user: { id: s.user.id, email: s.user.email },
     });
   } catch (e) {
+      } catch (e) {
     console.error('[auth-proxy] verify-otp exception:', e.message);
     return bad(res, 'verify_failed', 'Verify karne mein dikkat aayi', 500);
+  }
+}
+router.post('/verify-otp', handleVerifyOtp);
+router.get('/verify-otp', handleVerifyOtp);
+
+// POST /api/auth/password-login (also accepts GET for networks that block POST)
+// Body/query: { email, password }
+// Pehle sign-in try karta hai; user nahi mila to account bana kar sign-in
+// karta hai. Koi email NAHI bhejta — rate limit ko touch nahi karta.
+async function handlePasswordLogin(req, res) {
+  const email = ((req.body && req.body.email) || req.query.email || '').trim().toLowerCase();
+  const password = String((req.body && req.body.password) || req.query.password || '');
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return bad(res, 'invalid_email', 'Sahi email dalo');
+  }
+  if (password.length < 6) {
+    return bad(res, 'weak_password', 'Password kam se kam 6 characters ka rakho');
+  }
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return bad(res, 'auth_not_configured', 'Server par auth configure nahi hai', 503);
+  }
+
+  try {
+    let { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    // User exist nahi karta → pehli baar: account banao (email auto-confirm)
+    if (error && /invalid login credentials|user not found|email not confirmed/i.test(error.message || '')) {
+      const created = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true, // confirmation email SKIP — rate limit proof
+      });
+      if (created.error) {
+        console.error('[auth-proxy] password signup error:', created.error.message);
+        return bad(res, 'signup_failed', 'Account banane me dikkat aayi');
+      }
+      const retry = await supabase.auth.signInWithPassword({ email, password });
+      data = retry.data;
+      error = retry.error;
+    }
+
+    if (error || !data || !data.session) {
+      console.error('[auth-proxy] password login error:', error && error.message);
+      return res.status(401).json({
+        error: 'login_failed',
+        message: (error && /invalid login credentials/i.test(error.message))
+          ? 'Email ya password galat hai'
+          : (error && error.message) || 'Login nahi ho paya',
+      });
+    }
+    const s = data.session;
+    return res.json({
+      ok: true,
+      access_token: s.access_token,
+      refresh_token: s.refresh_token,
+      expires_in: s.expires_in,
+      user: { id: s.user.id, email: s.user.email },
+    });
+  } catch (e) {
+    console.error('[auth-proxy] password login exception:', e.message);
+    return bad(res, 'login_failed', 'Login me dikkat aayi', 500);
+  }
+}
+router.post('/password-login', handlePasswordLogin);
+router.get('/password-login', handlePasswordLogin);
+
+module.exports = router;
