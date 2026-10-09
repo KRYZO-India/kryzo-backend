@@ -53,11 +53,20 @@ router.get('/send-otp', handleSendOtp);
 async function handleVerifyOtp(req, res) {
   const email = ((req.body && req.body.email) || req.query.email || '').trim().toLowerCase();
   const token = ((req.body && req.body.token) || req.query.token || '').trim();
-  if (!email || !token) {
-    return bad(res, 'missing_fields', 'Email aur OTP dono chahiye');
+  const type = ((req.body && req.body.type) || req.query.type || 'email').trim();
+  if (!token) {
+    return bad(res, 'missing_fields', 'OTP chahiye');
   }
-  if (!/^\d{6}$/.test(token)) {
-    return bad(res, 'invalid_otp', '6-digit OTP dalo');
+  // For 6-digit email OTP, require email and 6 digits; for magiclink, token can be longer
+  if (type === 'email') {
+    if (!email) return bad(res, 'missing_fields', 'Email aur OTP dono chahiye');
+    if (!/^\d{6}$/.test(token)) {
+      return bad(res, 'invalid_otp', '6-digit OTP dalo');
+    }
+  } else if (type === 'magiclink') {
+    if (!email) return bad(res, 'missing_fields', 'Email chahiye');
+  } else {
+    return bad(res, 'invalid_type', 'Galat type');
   }
 
   const supabase = getSupabaseAdmin();
@@ -69,7 +78,7 @@ async function handleVerifyOtp(req, res) {
     const { data, error } = await supabase.auth.verifyOtp({
       email,
       token,
-      type: 'email',
+      type: type,
     });
     if (error || !data || !data.session) {
       console.error('[auth-proxy] verify-otp error:', error && error.message);
@@ -89,9 +98,3 @@ async function handleVerifyOtp(req, res) {
   } catch (e) {
     console.error('[auth-proxy] verify-otp exception:', e.message);
     return bad(res, 'verify_failed', 'Verify karne mein dikkat aayi', 500);
-  }
-}
-router.post('/verify-otp', handleVerifyOtp);
-router.get('/verify-otp', handleVerifyOtp);
-
-module.exports = router;
