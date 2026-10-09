@@ -24,7 +24,11 @@ const { env, printWarnings } = require('./env');
 const app = express();
 
 // ---- CORS: allow all origins (public API for the KRYZO app) ----
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
 // ---- Webhook raw body FIRST (signature verification needs exact bytes) ----
 app.use('/api/billing/webhook', express.raw({ type: '*/*', limit: '1mb' }));
